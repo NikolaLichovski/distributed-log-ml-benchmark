@@ -149,6 +149,23 @@ The batch script executes a predefined set of experiments covering:
 - High partition counts
 - Stress testing
 
+#### Sample Results
+
+The following results were obtained by running: `./run_batch_experiments.sh 10 60`
+
+They illustrate how system performance metrics vary across different configurations:
+- **Throughput** scales approximately linearly with the number of producers
+- **End-to-end latency** remains stable across most configurations
+- **Consumer lag** is strongly influenced by the number of Kafka partitions
+
+<p align="center">
+  <img src="./pic1.png" width="90%" alt="Summary of batch experiment results">
+</p>
+
+<p align="center">
+  <em>Figure: Summary of throughput, latency, and consumer lag across all batch experiments.</em>
+</p>
+
 ## Performance Metrics
 
 ### Collected Metrics
