@@ -207,6 +207,11 @@ wait_for_postgres
 # Create experiment record
 create_experiment_record
 
+# Start dashboard early, before scaling producers/consumers
+if ! docker ps --format "{{.Names}}" | grep -q "streamlit-dashboard"; then
+    docker-compose up -d dashboard
+fi
+
 echo ""
 echo -e "${BLUE}→ Scaling services to match experiment configuration...${NC}"
 echo -e "  Producers: ${NUM_PRODUCERS}, Consumers: ${NUM_CONSUMERS}"
@@ -217,7 +222,9 @@ docker-compose up -d --scale kafka-producer=$NUM_PRODUCERS --scale ml-consumer=$
 echo -e "${GREEN}✓ Services scaled successfully${NC}"
 
 # Start dashboard if not already running
-docker-compose up -d dashboard
+#docker-compose up -d dashboard
+#docker-compose up -d --scale kafka-producer=$NUM_PRODUCERS --scale ml-consumer=$NUM_CONSUMERS dashboard
+#docker-compose up -d --no-recreate dashboard
 
 echo ""
 echo -e "${GREEN}═══════════════════════════════════════════════════════════${NC}"
