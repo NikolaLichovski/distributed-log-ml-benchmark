@@ -220,16 +220,15 @@ class LogConsumer:
             return pd.DataFrame()
 
     def retrain_model_if_needed(self):
-        """Retrain model if not trained or periodically."""
-        if not self.detector.is_trained and self.processed_count % 20 == 0:
+        """
+        Train once using a shared model so all consumer instances
+        use identical decision boundaries.
+        """
+        if not self.detector.is_trained:
             logs_df = self.fetch_training_data()
-            if not logs_df.empty and len(logs_df) >= 10:
-                logger.info(f"Training model with {len(logs_df)} samples...")
-                success = self.detector.train(logs_df)
-                if success:
-                    logger.info("Model training completed successfully")
-                else:
-                    logger.warning("Model training failed")
+            if not logs_df.empty and len(logs_df) >= 100:
+                logger.info(f"Attempting shared model training with {len(logs_df)} samples...")
+                self.detector.train_shared(logs_df)
 
     def process_message(self, msg):
         """Process a single Kafka message with timing for latency measurement."""
