@@ -79,8 +79,8 @@ class AnomalyDetector:
 
     def train(self, logs_df):
         """Train the anomaly detection model"""
-        if len(logs_df) < 10:
-            logger.warning("Not enough data to train model (need at least 10 samples)")
+        if len(logs_df) < 100:
+            logger.warning("Not enough data to train model (need at least 100 samples)")
             return False
 
         try:
@@ -168,3 +168,61 @@ class AnomalyDetector:
             logger.error(f"Error loading model: {e}")
 
         return False
+
+    def train_shared(self, logs_df):
+        """
+        Train only if no shared model exists yet.
+        Uses a lockfile so only one consumer trains; others wait and load.
+        Returns True if this consumer trained, False if it loaded instead.
+        """
+        import fcntl
+
+        LOCK_PATH = "/app/models/train.lock"
+        READY_PATH = "/app/models/model_ready"
+
+        # Fast path: model already written by a previous run or another consumer
+        if os.path.exists(READY_PATH):
+            if not self.is_trained:
+                self.load_model()
+            return False
+
+        lock_file = open(LOCK_PATH, 'w')
+        try:
+            # Non-blocking attempt to acquire exclusive lock
+            fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+            # Re-check inside the lock (another consumer may have just finished)
+            if os.path.exists(READY_PATH):
+                fcntl.flock(lock_file, fcntl.LOCK_UN)
+                lock_file.close()
+                self.load_model()
+                return False
+
+            # This consumer won the lock — train and save
+            logger.info("Acquired training lock — training shared model...")
+            success = self.train(logs_df)  # saves model + encoders
+            if success:
+                open(READY_PATH, 'w').close()  # signal others
+                logger.info("Shared model written and ready.")
+            fcntl.flock(lock_file, fcntl.LOCK_UN)
+            lock_file.close()
+            return success
+
+        except BlockingIOError:
+            # Another consumer holds the lock — wait for it to finish
+            lock_file.close()
+            logger.info("Another consumer is training — waiting for shared model...")
+            self._wait_for_shared_model(READY_PATH)
+            return False
+
+    def _wait_for_shared_model(self, ready_path, timeout=120):
+        """Block until the shared model is written or timeout expires."""
+        import time
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if os.path.exists(ready_path):
+                self.load_model()
+                logger.info("Shared model loaded successfully.")
+                return
+            time.sleep(2)
+        logger.error("Timed out waiting for shared model. Will retry on next message.")
